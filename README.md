@@ -67,6 +67,10 @@ Things to know before you rely on the numbers:
 
 ### Home Assistant Marketplace (HACS)
 
+[![Open your Home Assistant instance and open this repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=miltonleopoldo&repository=speedtest-popup-card&category=plugin)
+
+Or add it by hand:
+
 1. Go to **Settings → Marketplace** (on older versions, open **HACS**).
 2. Choose **Add from link** (in HACS: **⋮ → Custom repositories**, type **Dashboard**).
 3. Paste the address of this repository and press **Install**.
