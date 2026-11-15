@@ -13,11 +13,35 @@ The card itself is a single button. It shows the last result on the right:
 ## What it does
 
 - Opens a popup on top of the dashboard and runs the test when you press **Start test**. A test takes about 25 seconds.
-- Measures ping and jitter first, then download, then upload. The gauge follows the speed in real time.
+- Measures ping and jitter first, then download, then upload. The gauge follows the speed in real time, and you can set the top of its scale with `max`.
 - Can store the result in Home Assistant helpers, so you can chart it, use it in automations or show it on other cards. This is optional.
 - Without helpers, it remembers the last result in the browser.
+- Optional chart: with `chart: true`, a button in the popup swaps the gauge for the download and upload curves, second by second.
 - English and Portuguese. It follows the language of your Home Assistant profile.
 - No other cards or integrations are needed.
+
+## What's new in 1.1.0
+
+- **Chart panel.** A new optional panel shows the download and upload curves over time. A button in the popup swaps between the gauge and the chart. Turn it on with `chart: true`.
+- **Ready for multi-gigabit lines.** The download now uses 8 connections with blocks that grow from 5 up to 50 MB when the line can take it, and the upload uses 6 connections with blocks up to 32 MB. The fixed 5 MB blocks of 1.0.0 could not fill a 2 Gbit/s line.
+- **Adjustable gauge scale.** The gauge used to stop at 1000 Mbit/s. The new `max` option sets the top of the scale, for example `max: 2500`.
+
+Nothing changes for existing cards: without the new options the card looks and behaves as before. The full history is in [CHANGELOG.md](CHANGELOG.md).
+
+## The chart panel
+
+Add `chart: true` to the card and a **Chart** button appears at the top of the popup, next to **Close**:
+
+![The popup showing download and upload speed over time](images/chart.png)
+
+- The button swaps the gauge for the chart and back. You can press it before, during or after a test.
+- The blue line is the download speed and the yellow line is the upload speed, both in Mbit/s.
+- The horizontal axis is the time since the start of each phase, in seconds. Both lines start at zero, so you can compare how fast each one ramps up and how steady it stays.
+- The vertical scale adjusts itself to the highest speed measured, so it needs no configuration on slow or very fast lines.
+- The lines are drawn live while the test runs and stay on screen when it ends, until you run another test or reload the page.
+- The popup always opens on the gauge.
+
+A dip in the middle of a line usually means the connection was shared with something else at that moment, or that the Wi-Fi signal dropped. A line that climbs slowly and never flattens suggests the test is too short for that connection: try a higher `duration`.
 
 ## How the measurement works
 
@@ -27,8 +51,8 @@ The card talks to Cloudflare's public speed test endpoints (`speed.cloudflare.co
 | --- | --- |
 | Ping | The fastest of 16 small requests |
 | Jitter | The median difference between consecutive requests |
-| Download | 6 parallel connections fetching 5 MB blocks for 10 seconds |
-| Upload | 4 parallel connections sending 1 to 16 MB blocks for 10 seconds |
+| Download | 8 parallel connections fetching 5 to 50 MB blocks for 10 seconds |
+| Upload | 6 parallel connections sending 1 to 32 MB blocks for 10 seconds |
 
 Things to know before you rely on the numbers:
 
@@ -96,6 +120,8 @@ You can list only the ones you want. The card writes the result to each helper a
 | --- | --- | --- |
 | `title` | `Speed test` | Text on the button and at the top of the popup |
 | `duration` | `10` | Seconds for the download phase and again for the upload phase (4 to 30) |
+| `max` | `1000` | Top of the gauge scale in Mbit/s (100 to 10000). Set it above your line speed, for example `2500` on a 2 Gbit/s line |
+| `chart` | `false` | `true` adds a button in the popup that swaps the gauge for a chart of download and upload speed over time |
 | `language` | `auto` | `auto` follows your Home Assistant profile; `en` or `pt` forces a language |
 | `entities` | none | Helpers that receive the result: `download`, `upload`, `ping`, `jitter` |
 
@@ -105,6 +131,8 @@ Example with every option:
 type: custom:speedtest-popup-card
 title: Internet speed
 duration: 8
+max: 2500
+chart: true
 language: en
 entities:
   download: input_number.speed_test_download

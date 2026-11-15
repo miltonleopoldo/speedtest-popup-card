@@ -1,10 +1,11 @@
-/* Speedtest Popup Card for Home Assistant — v1.0.0
+/* Speedtest Popup Card for Home Assistant — v1.1.0
    Runs a speed test (ping, jitter, download, upload) in the browser of whoever is looking at the
    dashboard, against Cloudflare's public speed test endpoints, inside a popup styled like the dashboard.
-   Optionally stores the result in Home Assistant helpers. MIT licence. */
+   Optionally stores the result in Home Assistant helpers. With `chart: true` the popup gets a button that
+   swaps the gauge for a chart of download and upload speed over time. MIT licence. */
 const RST_I18N = {
-  en: { title: 'Speed test', sub: 'Measures this device\'s connection: ping, jitter, download and upload', last: 'Last test', close: 'Close', ready: 'Ready', start: 'Start test', again: 'Run again', running: 'Testing…', hint: 'The test runs on this device and takes about {s} seconds.', pinging: 'Measuring ping', download: 'Download', upload: 'Upload', done: 'Done', failed: 'Test failed', failMsg: 'The test could not be completed: ', server: 'Cloudflare server', measuring: 'measuring this device\'s connection', saved: 'Result saved to Home Assistant', savedLocal: 'Result saved in this browser', errDown: 'the server refused the download', errUp: 'the server refused the upload', cancelled: 'cancelled' },
-  pt: { title: 'Teste de velocidade', sub: 'Mede a ligação deste dispositivo: ping, jitter, download e upload', last: 'Último teste', close: 'Fechar', ready: 'Pronto', start: 'Iniciar teste', again: 'Repetir teste', running: 'A testar…', hint: 'O teste corre neste dispositivo e demora cerca de {s} segundos.', pinging: 'A medir o ping', download: 'Download', upload: 'Upload', done: 'Concluído', failed: 'O teste falhou', failMsg: 'Não foi possível completar o teste: ', server: 'Servidor Cloudflare', measuring: 'a medir a ligação deste dispositivo', saved: 'Resultado guardado no Home Assistant', savedLocal: 'Resultado guardado neste browser', errDown: 'o servidor recusou o download', errUp: 'o servidor recusou o upload', cancelled: 'cancelado' },
+  en: { title: 'Speed test', sub: 'Measures this device\'s connection: ping, jitter, download and upload', last: 'Last test', close: 'Close', ready: 'Ready', start: 'Start test', again: 'Run again', running: 'Testing…', hint: 'The test runs on this device and takes about {s} seconds.', pinging: 'Measuring ping', download: 'Download', upload: 'Upload', done: 'Done', failed: 'Test failed', failMsg: 'The test could not be completed: ', server: 'Cloudflare server', measuring: 'measuring this device\'s connection', saved: 'Result saved to Home Assistant', savedLocal: 'Result saved in this browser', errDown: 'the server refused the download', errUp: 'the server refused the upload', cancelled: 'cancelled', chart: 'Chart', gauge: 'Gauge', secs: 'seconds' },
+  pt: { title: 'Teste de velocidade', sub: 'Mede a ligação deste dispositivo: ping, jitter, download e upload', last: 'Último teste', close: 'Fechar', ready: 'Pronto', start: 'Iniciar teste', again: 'Repetir teste', running: 'A testar…', hint: 'O teste corre neste dispositivo e demora cerca de {s} segundos.', pinging: 'A medir o ping', download: 'Download', upload: 'Upload', done: 'Concluído', failed: 'O teste falhou', failMsg: 'Não foi possível completar o teste: ', server: 'Servidor Cloudflare', measuring: 'a medir a ligação deste dispositivo', saved: 'Resultado guardado no Home Assistant', savedLocal: 'Resultado guardado neste browser', errDown: 'o servidor recusou o download', errUp: 'o servidor recusou o upload', cancelled: 'cancelado', chart: 'Gráfico', gauge: 'Velocímetro', secs: 'segundos' },
 };
 const RST_STORE = 'speedtest-popup-card:last';
 const RST_BASE = 'https://speed.cloudflare.com';
@@ -12,9 +13,10 @@ const RST_SLEEP = (ms) => new Promise((r) => setTimeout(r, ms));
 
 class SpeedtestPopupCard extends HTMLElement {
   setConfig(c) {
-    this._c = Object.assign({ duration: 10, language: 'auto', entities: {} }, c || {});
+    this._c = Object.assign({ duration: 10, max: 1000, language: 'auto', chart: false, entities: {} }, c || {});
     this._c.entities = this._c.entities || {};
     this._dur = Math.max(4, Math.min(30, Number(this._c.duration) || 10)) * 1000;
+    this._max = Math.max(100, Math.min(10000, Number(this._c.max) || 1000));
   }
   getCardSize() { return 1; }
   static getStubConfig() { return { duration: 10 }; }
@@ -34,6 +36,7 @@ class SpeedtestPopupCard extends HTMLElement {
     const T = this._t = RST_I18N[this._lang()];
     const title = this._c.title || T.title;
     const secs = Math.round((this._dur * 2) / 1000 + 5);
+    const mid = Number((Math.sqrt(this._max + 1) - 1).toPrecision(1));
     const r = this.attachShadow({ mode: 'open' });
     r.innerHTML = `
 <style>
@@ -50,6 +53,12 @@ class SpeedtestPopupCard extends HTMLElement {
     box-shadow:0 24px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.05); }
   .top { display:flex; justify-content:space-between; align-items:center; font:600 12px ui-monospace,Consolas,monospace;
     letter-spacing:.2em; color:#7fe9ff; text-transform:uppercase; }
+  .acts { display:flex; gap:8px; align-items:center; }
+  .sw { cursor:pointer; color:#7fe9ff; border:1px solid rgba(0,229,255,.45); border-radius:10px; padding:6px 12px; letter-spacing:.08em; }
+  .sw[hidden], .gauge[hidden], .chart[hidden] { display:none; }
+  .chart { width:520px; max-width:100%; margin:14px auto 0; }
+  .chart svg { width:100%; display:block; }
+  .chart text { font:8px ui-monospace,Consolas,monospace; fill:rgba(160,190,220,.7); }
   .x { cursor:pointer; color:#fff; background:#e53935; border-radius:10px; padding:7px 12px; letter-spacing:.08em; }
   .gauge { position:relative; width:320px; max-width:80vw; margin:14px auto 0; }
   .gauge svg { width:100%; display:block; }
@@ -75,17 +84,27 @@ class SpeedtestPopupCard extends HTMLElement {
 </ha-card>
 <div class="back" id="back" hidden>
   <div class="modal">
-    <div class="top"><span>// ${title}</span><span class="x" id="close">✕ ${T.close}</span></div>
-    <div class="gauge">
+    <div class="top"><span>// ${title}</span><span class="acts"><span class="sw" id="swap" hidden></span><span class="x" id="close">✕ ${T.close}</span></span></div>
+    <div class="gauge" id="gauge">
       <svg viewBox="0 0 200 120">
         <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="12" stroke-linecap="round"/>
         <path id="arc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#00e5ff" stroke-width="12" stroke-linecap="round"
               stroke-dasharray="251.3" stroke-dashoffset="251.3" style="transition:stroke-dashoffset .25s linear, stroke .3s; filter:drop-shadow(0 0 6px #00e5ff)"/>
         <text x="20" y="116" fill="rgba(160,190,220,.6)" font-size="7" text-anchor="middle">0</text>
-        <text x="100" y="12" fill="rgba(160,190,220,.6)" font-size="7" text-anchor="middle">30</text>
-        <text x="180" y="116" fill="rgba(160,190,220,.6)" font-size="7" text-anchor="middle">1000</text>
+        <text x="100" y="12" fill="rgba(160,190,220,.6)" font-size="7" text-anchor="middle">${mid}</text>
+        <text x="180" y="116" fill="rgba(160,190,220,.6)" font-size="7" text-anchor="middle">${this._max}</text>
       </svg>
       <div class="num"><b id="big">—</b><span id="unit">Mbit/s</span></div>
+    </div>
+    <div class="chart" id="chart" hidden>
+      <svg viewBox="0 0 320 150">
+        <g id="c-grid"></g>
+        <polyline id="c-down" fill="none" stroke="#00e5ff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 3px #00e5ff)"/>
+        <polyline id="c-up" fill="none" stroke="#ffc400" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 3px #ffc400)"/>
+        <text x="34" y="9" style="fill:#00e5ff">↓ Download</text>
+        <text x="98" y="9" style="fill:#ffc400">↑ Upload</text>
+        <text x="312" y="9" text-anchor="end">Mbit/s</text>
+      </svg>
     </div>
     <div class="phase" id="phase">${T.ready}</div>
     <div class="tiles">
@@ -103,6 +122,42 @@ class SpeedtestPopupCard extends HTMLElement {
     this.$('close').addEventListener('click', () => this._close());
     this.$('back').addEventListener('click', (e) => { if (e.target === this.$('back')) this._close(); });
     this.$('go').addEventListener('click', () => this._run());
+    this._sm = { d: [], u: [] };
+    if (this._c.chart) {
+      this.$('swap').hidden = false;
+      this.$('swap').addEventListener('click', () => this._panel(this.$('chart').hidden ? 'chart' : 'gauge'));
+      this._panel('gauge');
+    }
+  }
+
+  _panel(p) {
+    const chart = p === 'chart';
+    this.$('chart').hidden = !chart; this.$('gauge').hidden = chart;
+    this.$('swap').textContent = '⇄ ' + (chart ? this._t.gauge : this._t.chart);
+    if (chart) this._draw();
+  }
+
+  _sample(k, t, v) {
+    this._sm[k].push([t, v]);
+    if (this._c.chart && !this.$('chart').hidden) this._draw();
+  }
+
+  _draw() {
+    const X0 = 34, X1 = 312, Y0 = 18, Y1 = 128, dur = this._dur / 1000, S = this._sm;
+    let max = 10; S.d.concat(S.u).forEach((q) => { if (q[1] > max) max = q[1]; });
+    const mag = Math.pow(10, Math.floor(Math.log10(max))); const top = [1, 1.5, 2, 3, 4, 5, 6, 8, 10].map((m) => m * mag).find((m) => m >= max);
+    const x = (t) => X0 + (X1 - X0) * Math.min(1, t / dur), y = (v) => Y1 - (Y1 - Y0) * (v / top);
+    let g = '';
+    for (let i = 0; i <= 4; i++) {
+      const v = top * i / 4, yy = y(v);
+      g += '<line x1="' + X0 + '" x2="' + X1 + '" y1="' + yy + '" y2="' + yy + '" stroke="rgba(255,255,255,' + (i ? '.07' : '.2') + ')" stroke-width="1"/>';
+      g += '<text x="' + (X0 - 5) + '" y="' + (yy + 3) + '" text-anchor="end">' + (v >= 10 || v === 0 ? Math.round(v) : v.toFixed(1)) + '</text>';
+    }
+    [0, 0.5, 1].forEach((f) => { g += '<text x="' + (X0 + (X1 - X0) * f) + '" y="' + (Y1 + 12) + '" text-anchor="' + (f === 0 ? 'start' : f === 1 ? 'end' : 'middle') + '">' + (f === 0.5 ? (dur / 2) + ' ' + this._t.secs : Math.round(dur * f) + ' s') + '</text>'; });
+    this.$('c-grid').innerHTML = g;
+    const pts = (a) => a.map((q) => x(q[0]).toFixed(1) + ',' + y(q[1]).toFixed(1)).join(' ');
+    this.$('c-down').setAttribute('points', pts(S.d));
+    this.$('c-up').setAttribute('points', pts(S.u));
   }
 
   _close() {
@@ -130,7 +185,7 @@ class SpeedtestPopupCard extends HTMLElement {
   }
 
   _gauge(v, color) {
-    const frac = Math.max(0, Math.min(1, Math.log10(1 + v) / Math.log10(1001)));
+    const frac = Math.max(0, Math.min(1, Math.log10(1 + v) / Math.log10(this._max + 1)));
     const arc = this.$('arc');
     arc.setAttribute('stroke-dashoffset', String(251.3 * (1 - frac)));
     if (color) { arc.setAttribute('stroke', color); arc.style.filter = 'drop-shadow(0 0 6px ' + color + ')'; }
@@ -162,16 +217,18 @@ class SpeedtestPopupCard extends HTMLElement {
   }
 
   async _download(dur) {
-    let bytes = 0, mark = null, chunk = 5000000, fails = 0; const t0 = performance.now();
+    const sizes = [1e6, 5e6, 10e6, 25e6, 50e6]; let bytes = 0, mark = null, idx = 1, cap = sizes.length - 1; const t0 = performance.now();
     const ctrl = new AbortController(); this._dl = ctrl;
     const worker = async () => {
       while (performance.now() - t0 < dur && !this._cancel) {
+        const mine = idx, s = performance.now();
         try {
-          const r = await fetch(RST_BASE + '/__down?bytes=' + chunk + '&r=' + Math.random(), { cache: 'no-store', signal: ctrl.signal });
-          const rd = r.body.getReader();
+          const r = await fetch(RST_BASE + '/__down?bytes=' + sizes[mine] + '&r=' + Math.random(), { cache: 'no-store', signal: ctrl.signal });
           if (!r.ok) throw new Error('HTTP ' + r.status);
+          const rd = r.body.getReader();
           for (;;) { const x = await rd.read(); if (x.done) break; bytes += x.value.length; }
-        } catch (e) { if (ctrl.signal.aborted) return; fails++; if (chunk > 1000000) chunk = 1000000; await RST_SLEEP(300); }
+          if (performance.now() - s < 350 && mine === idx && idx < cap) idx++;
+        } catch (e) { if (ctrl.signal.aborted) return; cap = Math.max(0, mine - 1); if (idx > cap) idx = cap; await RST_SLEEP(300); }
       }
     };
     let lastB = 0, lastT = t0, ema = 0;
@@ -179,10 +236,10 @@ class SpeedtestPopupCard extends HTMLElement {
       const now = performance.now(); const inst = (bytes - lastB) * 8 / 1e6 / ((now - lastT) / 1000);
       lastB = bytes; lastT = now; ema = ema ? ema * 0.6 + inst * 0.4 : inst;
       if (!mark && now - t0 >= 1500) mark = { b: bytes, t: now };
-      this._gauge(ema, '#00e5ff'); this.$('v-down').textContent = Math.round(ema);
+      this._gauge(ema, '#00e5ff'); this.$('v-down').textContent = Math.round(ema); this._sample('d', (now - t0) / 1000, ema);
     }, 250);
     const stop = setTimeout(() => ctrl.abort(), dur);
-    await Promise.all([0, 1, 2, 3, 4, 5].map(worker));
+    await Promise.all([0, 1, 2, 3, 4, 5, 6, 7].map(worker));
     clearInterval(tick); clearTimeout(stop);
     const end = performance.now();
     if (!mark) mark = { b: 0, t: t0 };
@@ -194,7 +251,7 @@ class SpeedtestPopupCard extends HTMLElement {
     let done = 0, lastDone = 0, mark = null; const t0 = performance.now();
     const ctrl = new AbortController(); this._ul = ctrl;
     const mk = (n) => { const a = new Uint8Array(n); for (let i = 0; i < n; i += 65536) crypto.getRandomValues(a.subarray(i, Math.min(n, i + 65536))); return new Blob([a]); };
-    const blobs = { 1: mk(1e6), 4: mk(4e6), 16: mk(16e6) };
+    const blobs = { 1: mk(1e6), 4: mk(4e6), 16: mk(16e6), 32: mk(32e6) };
     const worker = async () => {
       let size = 1;
       while (performance.now() - t0 < dur && !this._cancel) {
@@ -204,16 +261,16 @@ class SpeedtestPopupCard extends HTMLElement {
           done += size * 1e6; lastDone = performance.now();
           if (!mark && lastDone - t0 >= 1200) mark = { b: done, t: lastDone };
           const took = performance.now() - s;
-          if (took < 700 && size < 16) size *= 4;
+          if (took < 700 && size < 32) size = size < 16 ? size * 4 : 32;
         } catch (e) { if (ctrl.signal.aborted) return; await RST_SLEEP(200); }
       }
     };
     const tick = setInterval(() => {
       const el = (performance.now() - t0) / 1000; const v = el > 0 ? done * 8 / 1e6 / el : 0;
-      this._gauge(v, '#ffc400'); this.$('v-up').textContent = Math.round(v);
+      this._gauge(v, '#ffc400'); this.$('v-up').textContent = Math.round(v); this._sample('u', el, v);
     }, 250);
     const stop = setTimeout(() => ctrl.abort(), dur);
-    await Promise.all([0, 1, 2, 3].map(worker));
+    await Promise.all([0, 1, 2, 3, 4, 5].map(worker));
     clearInterval(tick); clearTimeout(stop);
     if (done === 0) throw new Error(this._t.errUp);
     if (mark && lastDone > mark.t) return (done - mark.b) * 8 / 1e6 / ((lastDone - mark.t) / 1000);
@@ -235,6 +292,7 @@ class SpeedtestPopupCard extends HTMLElement {
     const go = this.$('go'); go.disabled = true; go.textContent = T.running;
     ['v-ping', 'v-jit', 'v-down', 'v-up'].forEach((i) => { this.$(i).textContent = '—'; });
     this._gauge(0, '#00e5ff');
+    this._sm = { d: [], u: [] }; if (this._c.chart) this._draw();
     try {
       let colo = '';
       try { const tr = await (await fetch(RST_BASE + '/cdn-cgi/trace', { signal: this._ctrl.signal })).text(); colo = (tr.match(/colo=(\w+)/) || [])[1] || ''; } catch (e) { /* no server info */ }
