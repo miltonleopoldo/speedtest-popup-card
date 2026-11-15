@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0
+
+- New server list in the popup: Cloudflare (default) or one of the nearest public Speedtest servers run by internet providers, with city and distance. The card fetches the list itself from `www.speedtest.net` and tests the chosen server over a secure WebSocket connection. The choice is remembered per browser. New `server_list` option (default `true`) to hide the list.
+- The **Chart** button moved to a row under the title, next to the server list.
+- The chart now takes the same space as the gauge, so the popup keeps its size when you switch.
+- No changes are needed in existing cards.
+
 ## 1.1.0
 
 - New optional chart panel (`chart: true`): a button in the popup swaps the gauge for a chart of download and upload speed over time. The popup always opens on the gauge.

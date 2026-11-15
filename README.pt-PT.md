@@ -18,19 +18,30 @@ O cartão em si é um botão. À direita mostra o último resultado:
 - Sem ajudantes, lembra-se do último resultado no próprio browser.
 - Gráfico opcional: com `chart: true`, um botão na janela troca o velocímetro pelas curvas de download e de upload, segundo a segundo.
 - Português e inglês. Segue a língua do teu perfil no Home Assistant.
+- Escolha do servidor: a Cloudflare por omissão, ou um dos servidores Speedtest dos operadores mais próximos, a partir de uma lista na janela.
 - Não precisa de outros cartões nem de integrações.
 
-## Novidades da versão 1.1.0
+## Novidades da versão 1.2.0
 
-- **Painel com gráfico.** Um novo painel opcional mostra as curvas de download e de upload ao longo do tempo. Um botão na janela troca entre o velocímetro e o gráfico. Liga-se com `chart: true`.
-- **Preparado para linhas acima de 1 Gbit/s.** O download passa a usar 8 ligações, com blocos que crescem de 5 até 50 MB quando a linha aguenta, e o upload usa 6 ligações com blocos até 32 MB. Os blocos fixos de 5 MB da versão 1.0.0 não conseguiam encher uma linha de 2 Gbit/s.
-- **Escala do velocímetro ajustável.** O velocímetro parava nos 1000 Mbit/s. A nova opção `max` define o topo da escala, por exemplo `max: 2500`.
+- **Escolha do servidor de teste.** Uma lista no topo da janela mostra a Cloudflare (por omissão) e os servidores Speedtest dos operadores mais próximos, com a cidade e a distância. O cartão vai buscar a lista sozinho, por isso funciona em qualquer país sem instalar nada. Cada browser lembra-se da escolha que fizeste.
+- **Janela mais arrumada.** O botão **Gráfico** passou da barra do título para a linha logo abaixo, ao lado da lista de servidores, e o gráfico ocupa agora o mesmo espaço do velocímetro, por isso a janela já não muda de tamanho quando trocas.
 
-Para quem já tem o cartão nada muda: sem as opções novas, fica com o mesmo aspeto e comportamento. O histórico completo está em [CHANGELOG.md](CHANGELOG.md).
+Para quem já tem o cartão nada muda: o teste continua a ser feito na Cloudflare, a não ser que escolhas outro servidor. O histórico completo está em [CHANGELOG.md](CHANGELOG.md).
+
+## Escolher o servidor de teste
+
+![A lista de servidores de teste na janela](images/servers.png)
+
+- **Cloudflare (automático)** é a opção por omissão. A Cloudflare escolhe o centro de dados mais próximo, e o rodapé mostra qual foi usado.
+- Em **Servidores próximos** aparecem os servidores Speedtest públicos mais perto da ligação à internet do dispositivo, com o operador, a cidade e a distância em km. A lista muda conforme o sítio onde estás: em Lisboa aparecem operadores como a Vodafone, a NOS e a MEO; noutro país aparecem os de lá.
+- A escolha fica guardada no browser, por isso cada dispositivo pode usar um servidor diferente.
+- O servidor de um operador costuma estar mais perto do que a Cloudflare, o que dá um ping mais baixo e um resultado mais próximo do que o teu operador te vende. Testar em mais do que um servidor ajuda a perceber se o problema é da linha ou do caminho até ao servidor.
+- Se um servidor não responder, o teste pára com uma mensagem e podes escolher outro ou voltar à Cloudflare. Se não for possível obter a lista, só aparece a Cloudflare.
+- Acrescenta `server_list: false` para esconder a lista e usar sempre a Cloudflare.
 
 ## O painel com gráfico
 
-Acrescenta `chart: true` ao cartão e passa a aparecer um botão **Gráfico** no topo da janela, ao lado de **Fechar**:
+Acrescenta `chart: true` ao cartão e passa a aparecer um botão **Gráfico** na janela, na linha logo abaixo do título:
 
 ![A janela com as curvas de download e upload ao longo do tempo](images/chart.png)
 
@@ -39,13 +50,15 @@ Acrescenta `chart: true` ao cartão e passa a aparecer um botão **Gráfico** no
 - O eixo horizontal é o tempo desde o início de cada fase, em segundos. As duas linhas começam no zero, para poderes comparar a rapidez com que cada uma arranca e se se mantém estável.
 - A escala vertical ajusta-se sozinha à velocidade mais alta medida, por isso não precisa de configuração, seja a linha lenta ou muito rápida.
 - As linhas são desenhadas ao vivo durante o teste e ficam no ecrã quando ele acaba, até correres outro teste ou recarregares a página.
-- A janela abre sempre no velocímetro.
+- A janela abre sempre no velocímetro e mantém o tamanho quando trocas.
 
 Uma quebra a meio de uma linha costuma querer dizer que a ligação estava a ser partilhada com outra coisa nesse momento, ou que o sinal do Wi-Fi caiu. Uma linha que sobe devagar e nunca estabiliza sugere que o teste é curto de mais para essa ligação: experimenta uma `duration` maior.
 
 ## Como é feita a medição
 
-O cartão fala diretamente com os endereços públicos de teste de velocidade da Cloudflare (`speed.cloudflare.com`), a partir do teu browser:
+O teste corre diretamente no teu browser, contra o servidor escolhido na lista.
+
+Com a **Cloudflare**, o cartão usa os endereços públicos de teste de velocidade dela (`speed.cloudflare.com`):
 
 | Valor | Como é medido |
 | --- | --- |
@@ -54,13 +67,23 @@ O cartão fala diretamente com os endereços públicos de teste de velocidade da
 | Download | 8 ligações em paralelo a descarregar blocos de 5 a 50 MB durante 10 segundos |
 | Upload | 6 ligações em paralelo a enviar blocos de 1 a 32 MB durante 10 segundos |
 
+Com um **servidor Speedtest de um operador**, o cartão obtém a lista de servidores próximos em `www.speedtest.net` e depois fala com o servidor escolhido por uma ligação WebSocket segura:
+
+| Valor | Como é medido |
+| --- | --- |
+| Ping | O mais rápido de 16 pings |
+| Jitter | A mediana das diferenças entre pings seguidos |
+| Download | 6 ligações em paralelo a receber blocos de 1 a 25 MB durante 10 segundos |
+| Upload | 6 ligações em paralelo a enviar blocos de 1 a 8 MB durante 10 segundos |
+
 O que convém saber antes de confiar nos números:
 
 - **Mede o dispositivo que tens à frente.** Num PC ligado por cabo, mede a linha. Num telemóvel, mede o Wi-Fi desse telemóvel. É diferente da integração Speedtest.net do Home Assistant, que corre no servidor.
 - **O ping sai mais alto do que um ping clássico.** É medido com pedidos web, que têm algum peso extra.
 - **Um teste no browser costuma dar um pouco menos do que uma aplicação nativa** em linhas muito rápidas.
-- **O dispositivo precisa de internet** e de conseguir chegar a `speed.cloudflare.com`.
+- **O dispositivo precisa de internet** e de conseguir chegar a `speed.cloudflare.com` e, se usares a lista de servidores, a `www.speedtest.net` e ao servidor escolhido.
 - **A Cloudflare pode limitar ou alterar estes endereços.** São públicos, mas não são um serviço garantido para terceiros. Se os pedidos forem recusados, o cartão passa para blocos mais pequenos; se for tudo recusado, mostra "O teste falhou" e não guarda nada. Muitos testes seguidos podem provocar estes limites.
+- **Os servidores Speedtest são dos operadores.** Um operador pode deixar de aceitar testes feitos a partir de páginas web a qualquer momento. Se isso acontecer, escolhe outro servidor ou a Cloudflare.
 - **Cada teste gasta dados:** cerca de 1 GB de download e 500 MB de upload numa linha de 1 Gbit/s com a duração por omissão. Em ligações com tráfego limitado, baixa a `duration`.
 
 ## Instalação
@@ -126,6 +149,7 @@ Podes indicar só os que quiseres. No fim de cada teste bem-sucedido, o cartão 
 | `duration` | `10` | Segundos da fase de download e outros tantos da fase de upload (4 a 30) |
 | `max` | `1000` | Topo da escala do velocímetro em Mbit/s (100 a 10000). Põe-no acima da velocidade da tua linha, por exemplo `2500` numa linha de 2 Gbit/s |
 | `chart` | `false` | `true` acrescenta na janela um botão que troca o velocímetro por um gráfico da velocidade de download e de upload ao longo do tempo |
+| `server_list` | `true` | Mostra a lista de servidores de teste na janela. `false` esconde-a e usa sempre a Cloudflare |
 | `language` | `auto` | `auto` segue o teu perfil do Home Assistant; `pt` ou `en` força uma língua |
 | `entities` | nenhum | Ajudantes que recebem o resultado: `download`, `upload`, `ping`, `jitter` |
 
@@ -151,6 +175,8 @@ entities:
 | --- | --- |
 | "Custom element doesn't exist: speedtest-popup-card" | Falta o recurso ou o browser tem uma cópia antiga. Confirma em **Resources** e carrega em Ctrl + F5 |
 | "O teste falhou: o servidor recusou o download" | A Cloudflare está a limitar os pedidos do teu endereço. Espera uns minutos e tenta outra vez |
+| "O teste falhou: o servidor não respondeu" | O servidor Speedtest escolhido está em baixo ou não aceita testes a partir de páginas web. Escolhe outro ou a Cloudflare |
+| A lista de servidores só mostra a Cloudflare | Não foi possível obter a lista de servidores próximos, por exemplo porque `www.speedtest.net` está bloqueado na tua rede. A Cloudflare continua a funcionar |
 | O resultado não fica guardado no Home Assistant | Confirma que os nomes em `entities` existem e estão escritos tal como em **Settings → Entities** |
 | A velocidade é muito mais baixa do que o esperado | O teste mede o dispositivo que estás a usar. Experimenta num computador ligado por cabo |
 
