@@ -117,6 +117,10 @@ type: custom:speedtest-popup-card
 
 That is all the card needs. It will keep the last result in the browser.
 
+Not sure where to start? This short video shows how to add the card to your dashboard, step by step:
+
+[![Add the Speedtest Popup Card to your HA dashboard](https://img.youtube.com/vi/h_wP68nAD88/maxresdefault.jpg)](https://youtu.be/h_wP68nAD88)
+
 ## Storing results in Home Assistant (optional)
 
 Create up to four **Number** helpers in **Settings → Devices & services → Helpers → Create helper → Number**:
